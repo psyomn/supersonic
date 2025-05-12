@@ -3,6 +3,7 @@ package ipc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"strconv"
@@ -47,7 +48,7 @@ func (s *serverImpl) Serve(listener net.Listener) error {
 
 func (s *serverImpl) Shutdown(ctx context.Context) error {
 	err := s.server.Shutdown(ctx)
-	DestroyConn()
+	err = errors.Join(err, DestroyConn())
 	return err
 }
 
