@@ -146,7 +146,7 @@ func (d *DLNAPlayer) PlayFile(urlstr string, meta mediaprovider.MediaItemMetadat
 		return nil
 	}
 
-	d.ensureSetupProxy()
+	util.OnErrLog(d.ensureSetupProxy(), "dlna: setup proxy: play file")
 
 	d.metaLock.Lock()
 	d.curTrackMeta = meta
@@ -168,7 +168,7 @@ func (d *DLNAPlayer) PlayFile(urlstr string, meta mediaprovider.MediaItemMetadat
 		// TODO: do something better than this!!
 		time.Sleep(2 * time.Second)
 		if !d.destroyed {
-			d.sendSeekCmd(startTime)
+			util.OnErrLog(d.sendSeekCmd(startTime), "dlnaplayer seekcmd")
 		}
 		d.pendingPlayStart = false
 	} else {
@@ -220,7 +220,7 @@ func (d *DLNAPlayer) SetNextFile(url string, meta mediaprovider.MediaItemMetadat
 	d.nextTrackMeta = meta
 	d.metaLock.Unlock()
 	if url != "" {
-		d.ensureSetupProxy()
+		util.OnErrLog(d.ensureSetupProxy(), "dlna: setup proxy: set next file")
 
 		key := d.addURLToProxy(url)
 		media = &avtransport.MediaItem{
@@ -415,6 +415,7 @@ func (d *DLNAPlayer) Destroy() {
 	if d.proxyServer != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
+		//nolint:errcheck
 		go d.proxyServer.Shutdown(ctx)
 		d.proxyServer = nil
 	}
@@ -454,6 +455,7 @@ func (d *DLNAPlayer) ensureSetupProxy() error {
 		Handler: http.HandlerFunc(d.handleRequest),
 	}
 
+	//nolint:errcheck
 	go d.proxyServer.Serve(listener)
 	return nil
 }
@@ -525,7 +527,7 @@ func (d *DLNAPlayer) handleOnTrackChange() {
 			media := d.unsetNextMediaItem
 			d.unsetNextMediaItem = nil
 			d.metaLock.Unlock()
-			d.playAVTransportMedia(media)
+			util.OnErrLog(d.playAVTransportMedia(media), "dlna: handleontrackchange")
 		} else {
 			d.metaLock.Unlock()
 		}
