@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net"
 	"net/http"
+
+	"github.com/dweymouth/supersonic/backend/util"
 )
 
 var ErrPingFail = errors.New("ping failed")
@@ -89,7 +91,7 @@ func (c *Client) sendRequest(path string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		var r Response
-		json.NewDecoder(resp.Body).Decode(&r)
+		util.OnErrLog(json.NewDecoder(resp.Body).Decode(&r), "ipc: could not decode json")
 		return errors.New(r.Error)
 	}
 	return nil

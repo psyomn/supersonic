@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -56,7 +57,9 @@ func (s *serverImpl) createHandler() http.Handler {
 	m := http.NewServeMux()
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("The given path is not valid"))
+		if _, err := w.Write([]byte("The given path is not valid")); err != nil {
+			log.Printf("error: %s", err)
+		}
 	})
 	m.HandleFunc(PingPath, s.makeSimpleEndpointHandler(func() {}))
 	m.HandleFunc(ShowPath, s.makeSimpleEndpointHandler(func() {
@@ -77,9 +80,13 @@ func (s *serverImpl) createHandler() http.Handler {
 		v := r.URL.Query().Get("v")
 		if vol, err := strconv.Atoi(v); err == nil {
 			s.pbHandler.SetVolume(vol)
-			s.writeOK(w)
+			if _, err := s.writeOK(w); err != nil {
+				log.Printf("error: %s", err)
+			}
 		} else {
-			s.writeErr(w, err)
+			if _, err := s.writeErr(w, err); err != nil {
+				log.Printf("error: %s", err)
+			}
 		}
 	})
 	m.HandleFunc(VolumeAdjustPath, s.makeFloatEndpointHandler("pct", func(pct float64) {
@@ -93,7 +100,7 @@ func (s *serverImpl) createHandler() http.Handler {
 func (s *serverImpl) makeSimpleEndpointHandler(f func()) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		f()
-		s.writeOK(w)
+		_, _ = s.writeOK(w)
 	}
 }
 
@@ -102,9 +109,9 @@ func (s *serverImpl) makeFloatEndpointHandler(queryParam string, f func(float64)
 		v := r.URL.Query().Get(queryParam)
 		if val, err := strconv.ParseFloat(v, 64); err == nil {
 			f(val)
-			s.writeOK(w)
+			_, _ = s.writeOK(w)
 		} else {
-			s.writeErr(w, err)
+			_, _ = s.writeErr(w, err)
 		}
 	}
 }
