@@ -3,6 +3,7 @@ package util
 import (
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 )
@@ -49,4 +50,11 @@ func GetLocalIP() (string, error) {
 	}
 
 	return "", fmt.Errorf("no suitable interface found")
+}
+
+func OnErrLog(err error, msg string) {
+	if err == nil {
+		return
+	}
+	log.Println(msg+":", err)
 }
