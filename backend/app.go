@@ -179,7 +179,7 @@ func StartupApp(appName, displayAppName, appVersion, appVersionTag, latestReleas
 
 	// Start IPC server if another not already running in a different instance
 	if cli == nil {
-		ipc.DestroyConn() // cleanup socket possibly orphaned by crashed process
+		_ = ipc.DestroyConn() // cleanup socket possibly orphaned by crashed process
 		listener, err := ipc.Listen()
 		if err == nil {
 			a.ipcServer = ipc.NewServer(a.PlaybackManager, a.callOnReactivate,
@@ -194,8 +194,8 @@ func StartupApp(appName, displayAppName, appVersion, appVersionTag, latestReleas
 	// Linux MPRIS
 	a.setupMPRIS(displayAppName)
 	// MacOS MPNowPlayingInfoCenter
-	InitMPMediaHandler(a.PlaybackManager, func(id string) (string, error) {
-		a.ImageManager.GetCoverThumbnail(id) // ensure image is cached locally
+	_ = InitMPMediaHandler(a.PlaybackManager, func(id string) (string, error) {
+		_, _ = a.ImageManager.GetCoverThumbnail(id) // ensure image is cached locally
 		return a.ImageManager.GetCoverArtUrl(id)
 	})
 	// Windows SMTC is initialized from main once we have a window HWND.
@@ -355,7 +355,7 @@ func (a *App) setupMPV() error {
 func (a *App) setupMPRIS(mprisAppName string) {
 	a.MPRISHandler = NewMPRISHandler(mprisAppName, a.PlaybackManager)
 	a.MPRISHandler.ArtURLLookup = func(id string) (string, error) {
-		a.ImageManager.GetCoverThumbnail(id) // ensure image is cached locally
+		_, _ = a.ImageManager.GetCoverThumbnail(id) // ensure image is cached locally
 		return a.ImageManager.GetCoverArtUrl(id)
 	}
 	a.MPRISHandler.OnRaise = func() error { a.callOnReactivate(); return nil }
@@ -370,7 +370,7 @@ func (a *App) SetupWindowsSMTC(hwnd uintptr) {
 		return
 	}
 	a.WinSMTC = smtc
-	smtc.UpdateMetadata(a.displayAppName, "")
+	_ = smtc.UpdateMetadata(a.displayAppName, "")
 
 	smtc.OnButtonPressed(func(btn SMTCButton) {
 		switch btn {
@@ -392,16 +392,16 @@ func (a *App) SetupWindowsSMTC(hwnd uintptr) {
 
 	a.PlaybackManager.OnSongChange(func(nowPlaying mediaprovider.MediaItem, _ *mediaprovider.Track) {
 		if nowPlaying == nil {
-			smtc.UpdateMetadata("Supersonic", "")
+			_ = smtc.UpdateMetadata("Supersonic", "")
 			return
 		}
 		meta := nowPlaying.Metadata()
-		smtc.UpdateMetadata(meta.Name, strings.Join(meta.Artists, ", "))
-		smtc.UpdatePosition(0, meta.Duration*1000)
+		_ = smtc.UpdateMetadata(meta.Name, strings.Join(meta.Artists, ", "))
+		_ = smtc.UpdatePosition(0, meta.Duration*1000)
 		go func() {
-			a.ImageManager.GetCoverThumbnail(meta.CoverArtID) // ensure image is cached locally
+			_, _ = a.ImageManager.GetCoverThumbnail(meta.CoverArtID) // ensure image is cached locally
 			if path, err := a.ImageManager.GetCoverArtPath(meta.CoverArtID); err == nil {
-				smtc.SetThumbnail(path)
+				_ = smtc.SetThumbnail(path)
 			}
 		}()
 	})
@@ -412,18 +412,19 @@ func (a *App) SetupWindowsSMTC(hwnd uintptr) {
 			"smtc: update position error")
 	})
 	a.PlaybackManager.OnPlaying(func() {
-		smtc.SetEnabled(true)
+		_ = smtc.SetEnabled(true)
 		util.OnErrLog(
 			smtc.UpdatePlaybackState(SMTCPlaybackStatePlaying),
 			"smtc: playing error")
 	})
 	a.PlaybackManager.OnPaused(func() {
-		smtc.SetEnabled(true)
+		_ = smtc.SetEnabled(true)
 		util.OnErrLog(
 			smtc.UpdatePlaybackState(SMTCPlaybackStatePaused),
 			"smtc: paused error")
 	})
 	a.PlaybackManager.OnStopped(func() {
+		_ = smtc.SetEnabled(false)
 		util.OnErrLog(
 			smtc.UpdatePlaybackState(SMTCPlaybackStateStopped),
 			"smtc: stopped error")
