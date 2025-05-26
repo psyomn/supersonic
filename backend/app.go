@@ -86,8 +86,8 @@ func StartupApp(appName, displayAppName, appVersion, appVersionTag, latestReleas
 		cacheDir = configdir.LocalCache(appName)
 	}
 	// ensure config and cache dirs exist
-	configdir.MakePath(confDir)
-	configdir.MakePath(cacheDir)
+	util.OnErrLog(configdir.MakePath(confDir), "problem creating confDir")
+	util.OnErrLog(configdir.MakePath(cacheDir), "problem creating cacheDir")
 
 	var logFile *os.File
 	if isWindowsGUI() {
@@ -119,7 +119,7 @@ func StartupApp(appName, displayAppName, appVersion, appVersionTag, latestReleas
 		return nil, ErrAnotherInstance
 	} else if cli != nil && !a.Config.Application.AllowMultiInstance {
 		log.Println("Another instance is running. Reactivating it...")
-		cli.Show()
+		util.OnErrLog(cli.Show(), "error invoking /show")
 		return nil, ErrAnotherInstance
 	}
 
@@ -257,7 +257,7 @@ func (a *App) startConfigWriter(ctx context.Context) {
 			return
 		case <-tick.C:
 			if !reflect.DeepEqual(&a.lastWrittenCfg, a.Config) {
-				a.Config.WriteConfigFile(a.configFilePath())
+				util.OnErrLog(a.Config.WriteConfigFile(a.configFilePath()), "could not write config file")
 				a.lastWrittenCfg = *a.Config
 			}
 		}
@@ -294,7 +294,7 @@ func (a *App) initMPV() error {
 
 func (a *App) setupMPV() error {
 	a.Config.LocalPlayback.Volume = clamp(a.Config.LocalPlayback.Volume, 0, 100)
-	a.LocalPlayer.SetVolume(a.Config.LocalPlayback.Volume)
+	util.OnErrLog(a.LocalPlayer.SetVolume(a.Config.LocalPlayback.Volume), "mpv: could not set volume")
 
 	devs, err := a.LocalPlayer.ListAudioDevices()
 	if err != nil {
@@ -316,7 +316,7 @@ func (a *App) setupMPV() error {
 		// (e.g. a USB audio device that is currently unplugged)
 		desiredDevice = "auto"
 	}
-	a.LocalPlayer.SetAudioDevice(desiredDevice)
+	util.OnErrLog(a.LocalPlayer.SetAudioDevice(desiredDevice), "could not set audio device")
 
 	rgainOpts := []string{ReplayGainNone, ReplayGainAlbum, ReplayGainTrack, ReplayGainAuto}
 	if !slices.Contains(rgainOpts, a.Config.ReplayGain.Mode) {
@@ -332,11 +332,14 @@ func (a *App) setupMPV() error {
 		mode = player.ReplayGainTrack
 	}
 
-	a.LocalPlayer.SetReplayGainOptions(player.ReplayGainOptions{
-		Mode:            mode,
-		PreventClipping: a.Config.ReplayGain.PreventClipping,
-		PreampGain:      a.Config.ReplayGain.PreampGainDB,
-	})
+	util.OnErrLog(
+		a.LocalPlayer.SetReplayGainOptions(player.ReplayGainOptions{
+			Mode:            mode,
+			PreventClipping: a.Config.ReplayGain.PreventClipping,
+			PreampGain:      a.Config.ReplayGain.PreampGainDB,
+		}),
+		"could not set replay gain options",
+	)
 	a.LocalPlayer.SetAudioExclusive(a.Config.LocalPlayback.AudioExclusive)
 
 	eq := &mpv.ISO15BandEqualizer{
@@ -344,7 +347,7 @@ func (a *App) setupMPV() error {
 		Disabled: !a.Config.LocalPlayback.EqualizerEnabled,
 	}
 	copy(eq.BandGains[:], a.Config.LocalPlayback.GraphicEqualizerBands)
-	a.LocalPlayer.SetEqualizer(eq)
+	util.OnErrLog(a.LocalPlayer.SetEqualizer(eq), "could not set equalizer")
 
 	return nil
 }
@@ -404,19 +407,26 @@ func (a *App) SetupWindowsSMTC(hwnd uintptr) {
 	})
 	a.PlaybackManager.OnSeek(func() {
 		playbackStatus := a.PlaybackManager.PlaybackStatus()
-		smtc.UpdatePosition(int(playbackStatus.TimePos*1000), int(playbackStatus.Duration*1000))
+		util.OnErrLog(
+			smtc.UpdatePosition(int(playbackStatus.TimePos*1000), int(playbackStatus.Duration*1000)),
+			"smtc: update position error")
 	})
 	a.PlaybackManager.OnPlaying(func() {
 		smtc.SetEnabled(true)
-		smtc.UpdatePlaybackState(SMTCPlaybackStatePlaying)
+		util.OnErrLog(
+			smtc.UpdatePlaybackState(SMTCPlaybackStatePlaying),
+			"smtc: playing error")
 	})
 	a.PlaybackManager.OnPaused(func() {
 		smtc.SetEnabled(true)
-		smtc.UpdatePlaybackState(SMTCPlaybackStatePaused)
+		util.OnErrLog(
+			smtc.UpdatePlaybackState(SMTCPlaybackStatePaused),
+			"smtc: paused error")
 	})
 	a.PlaybackManager.OnStopped(func() {
-		smtc.SetEnabled(false)
-		smtc.UpdatePlaybackState(SMTCPlaybackStateStopped)
+		util.OnErrLog(
+			smtc.UpdatePlaybackState(SMTCPlaybackStateStopped),
+			"smtc: stopped error")
 	})
 }
 
@@ -456,7 +466,7 @@ func (a *App) Shutdown() {
 	a.SaveConfigFile()
 
 	if a.ipcServer != nil {
-		a.ipcServer.Shutdown(a.bgrndCtx)
+		util.OnErrLog(a.ipcServer.Shutdown(a.bgrndCtx), "ipc: shutdown")
 	}
 	a.MPRISHandler.Shutdown()
 	if a.WinSMTC != nil {
@@ -478,7 +488,13 @@ func (a *App) SavePlayQueueIfEnabled() {
 			queueServer = qs
 		}
 	}
-	SavePlayQueue(a.ServerManager.ServerID.String(), a.PlaybackManager, path.Join(a.configDir, savedQueueFile), queueServer)
+
+	util.OnErrLog(
+		SavePlayQueue(
+			a.ServerManager.ServerID.String(), a.PlaybackManager,
+			path.Join(a.configDir, savedQueueFile), queueServer),
+		"problem saving queue",
+	)
 }
 
 func (a *App) LoadSavedPlayQueue() error {
@@ -507,7 +523,7 @@ func (a *App) LoadSavedPlayQueue() error {
 }
 
 func (a *App) SaveConfigFile() {
-	a.Config.WriteConfigFile(a.configFilePath())
+	util.OnErrLog(a.Config.WriteConfigFile(a.configFilePath()), "could not write config file")
 	a.lastWrittenCfg = *a.Config
 }
 
