@@ -557,7 +557,7 @@ func (d *DLNAPlayer) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	if url == "" {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("404"))
+		_, _ = w.Write([]byte("404"))
 		return
 	}
 
